@@ -1,0 +1,9 @@
+Java file create Steps:
+1-First create the .java File in note pad and save it in a folder
+2-Wirte what you want to print with java syntext
+3-Open cmd and go to that directory in which your file is present
+4-After that write "javac" and File name with java extention
+5-if error came remove that error and then run it again with repeat step 3 and 4
+6-check ".class" file create in the folder 
+7-then run the file in cmd by writing "java " file name
+8-Your output came in cmd
