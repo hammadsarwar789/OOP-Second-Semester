@@ -1,0 +1,6 @@
+buyer@buyer.com,buyer123,buyer
+saqlain@gmail.com,12345,seller
+hammad@gmail.com,123,seller
+admin@admin.com,admin123,admin
+ah@mail.com,123,buyer
+seller@seller.com,seller123,seller
