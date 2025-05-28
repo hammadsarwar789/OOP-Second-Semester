@@ -1,4 +1,3 @@
 buyer@buyer.com,buyer123,buyer
-hammad@gmail.com,hammad123,buyer
 admin@admin.com,admin123,admin
 seller@seller.com,seller123,seller

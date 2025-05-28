@@ -14,16 +14,20 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
 public class Seller {
     private final ArtExhibitionManager manager;
     private final UserManager userManager;
     private final Stage stage;
     private final String sellerEmail;
-    private TableView<ArtPiece> artTable; // Store TableView reference
+    private TableView<ArtPiece> artTable;
+    private File selectedImageFile;
 
     public Seller(ArtExhibitionManager manager, UserManager userManager, Stage stage, String sellerEmail) {
         this.manager = manager;
@@ -38,7 +42,6 @@ public class Seller {
         BorderPane root = new BorderPane();
         root.setStyle("-fx-background-color: linear-gradient(to bottom, #e6f0fa, #ffffff);");
 
-        // Header
         VBox header = new VBox();
         header.setAlignment(Pos.CENTER);
         header.setPadding(new Insets(20));
@@ -50,7 +53,6 @@ public class Seller {
         titleLabel.setEffect(new DropShadow(5, Color.web("rgba(0,0,0,0.3)")));
         header.getChildren().add(titleLabel);
 
-        // TabPane for different functionalities
         TabPane tabPane = new TabPane();
         tabPane.setStyle("-fx-background-color: #ffffff; -fx-border-color: #d9e2ec; -fx-border-radius: 5;");
 
@@ -72,7 +74,6 @@ public class Seller {
 
         tabPane.getTabs().addAll(viewTab, addTab, updateTab, deleteTab);
 
-        // Footer with Logout
         HBox footer = new HBox();
         footer.setAlignment(Pos.CENTER_RIGHT);
         footer.setPadding(new Insets(10, 20, 10, 20));
@@ -97,7 +98,6 @@ public class Seller {
         stage.setScene(scene);
         stage.show();
 
-        // Fade-in animation
         root.setOpacity(0);
         FadeTransition fadeIn = new FadeTransition(Duration.millis(500), root);
         fadeIn.setFromValue(0.0);
@@ -128,7 +128,7 @@ public class Seller {
         Label messageLabel = new Label();
         messageLabel.setStyle("-fx-text-fill: #dc3545; -fx-font-size: 14;");
 
-        artTable = new TableView<>(); // Initialize the TableView
+        artTable = new TableView<>();
         artTable.setStyle("-fx-background-color: #ffffff; -fx-border-color: #d9e2ec; -fx-border-radius: 5;");
         TableColumn<ArtPiece, String> idCol = new TableColumn<>("ID");
         idCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getId()));
@@ -142,8 +142,42 @@ public class Seller {
         priceCol.setCellValueFactory(data -> new SimpleDoubleProperty(data.getValue().getPrice()).asObject());
         TableColumn<ArtPiece, String> buyerCol = new TableColumn<>("Buyer");
         buyerCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getBuyerEmail() != null ? data.getValue().getBuyerEmail() : ""));
-        artTable.getColumns().addAll(idCol, titleCol, artistCol, typeCol, priceCol, buyerCol);
-        updateArtTableItems(); // Set initial items
+        TableColumn<ArtPiece, Void> imageCol = new TableColumn<>("Image");
+        imageCol.setCellFactory(param -> new TableCell<>() {
+            private final Button imageButton = new Button("View Image");
+
+            {
+                styleButton(imageButton);
+                imageButton.setStyle("-fx-background-color: #17a2b8; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 5 10; -fx-background-radius: 5; -fx-font-size: 12;");
+                imageButton.setOnMouseEntered(e -> {
+                    imageButton.setStyle("-fx-background-color: #138496; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 5 10; -fx-background-radius: 5; -fx-font-size: 12;");
+                    imageButton.setScaleX(1.05);
+                    imageButton.setScaleY(1.05);
+                });
+                imageButton.setOnMouseExited(e -> {
+                    imageButton.setStyle("-fx-background-color: #17a2b8; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 5 10; -fx-background-radius: 5; -fx-font-size: 12;");
+                    imageButton.setScaleX(1.0);
+                    imageButton.setScaleY(1.0);
+                });
+
+                imageButton.setOnAction(e -> {
+                    ArtPiece artPiece = getTableView().getItems().get(getIndex());
+                    showImageDialog(artPiece);
+                });
+            }
+
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || getTableView().getItems().get(getIndex()).getImagePath() == null) {
+                    setGraphic(null);
+                } else {
+                    setGraphic(imageButton);
+                }
+            }
+        });
+        artTable.getColumns().addAll(idCol, titleCol, artistCol, typeCol, priceCol, buyerCol, imageCol);
+        updateArtTableItems();
         artTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
         content.getChildren().addAll(artTable, messageLabel);
@@ -151,12 +185,54 @@ public class Seller {
     }
 
     private void updateArtTableItems() {
-        // Update TableView with current art pieces for this seller
         artTable.setItems(javafx.collections.FXCollections.observableArrayList(
                 manager.getAllArtPieces().stream()
                         .filter(art -> art.getSellerEmail() != null && art.getSellerEmail().equalsIgnoreCase(sellerEmail))
                         .toList()
         ));
+    }
+
+    private void showImageDialog(ArtPiece artPiece) {
+        if (artPiece.getImagePath() == null || artPiece.getImagePath().isEmpty()) {
+            System.out.println("No image path for Art ID: " + artPiece.getId());
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("No Image");
+            alert.setHeaderText(null);
+            alert.setContentText("No image available for this art piece.");
+            alert.showAndWait();
+            return;
+        }
+
+        File imageFile = new File(artPiece.getImagePath());
+        if (!imageFile.exists()) {
+            System.out.println("Image file not found: " + artPiece.getImagePath());
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Image Not Found");
+            alert.setHeaderText(null);
+            alert.setContentText("The image file could not be found at: " + artPiece.getImagePath());
+            alert.showAndWait();
+            return;
+        }
+
+        Image image = new Image(imageFile.toURI().toString());
+        ImageView imageView = new ImageView(image);
+        imageView.setFitWidth(400);
+        imageView.setFitHeight(400);
+        imageView.setPreserveRatio(true);
+
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Art Image");
+        alert.setHeaderText("Image for Art ID: " + artPiece.getId());
+        alert.getDialogPane().setContent(imageView);
+        alert.getDialogPane().setStyle("-fx-background-color: #ffffff; -fx-background-radius: 10; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0, 0, 2);");
+
+        alert.getDialogPane().setOpacity(0);
+        FadeTransition fadeIn = new FadeTransition(Duration.millis(500), alert.getDialogPane());
+        fadeIn.setFromValue(0.0);
+        fadeIn.setToValue(1.0);
+        alert.setOnShown(event -> fadeIn.play());
+
+        alert.showAndWait();
     }
 
     private VBox createAddTab() {
@@ -193,6 +269,25 @@ public class Seller {
         priceField.setPromptText("Price");
         priceField.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #d9e2ec; -fx-border-radius: 5; -fx-padding: 8;");
 
+        Button chooseImageButton = new Button("Choose Image");
+        styleButton(chooseImageButton);
+        Label imageLabel = new Label("No image selected");
+        imageLabel.setStyle("-fx-font-size: 12; -fx-text-fill: #6c757d;");
+
+        chooseImageButton.setOnAction(e -> {
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Select Art Image");
+            fileChooser.getExtensionFilters().addAll(
+                    new FileChooser.ExtensionFilter("Image Files", "*.png", "*.jpg", "*.jpeg")
+            );
+            selectedImageFile = fileChooser.showOpenDialog(stage);
+            if (selectedImageFile != null) {
+                imageLabel.setText(selectedImageFile.getName());
+            } else {
+                imageLabel.setText("No image selected");
+            }
+        });
+
         Button addButton = new Button("Add Art Piece");
         styleButton(addButton);
 
@@ -206,7 +301,10 @@ public class Seller {
         grid.add(typeCombo, 1, 3);
         grid.add(new Label("Price:"), 0, 4);
         grid.add(priceField, 1, 4);
-        grid.add(addButton, 1, 5);
+        grid.add(new Label("Image:"), 0, 5);
+        grid.add(chooseImageButton, 1, 5);
+        grid.add(imageLabel, 1, 6);
+        grid.add(addButton, 1, 7);
 
         addButton.setOnAction(e -> {
             try {
@@ -222,15 +320,25 @@ public class Seller {
                 }
 
                 String id = manager.generateNextArtId();
+                String imagePath = null;
+                if (selectedImageFile != null) {
+                    File destDir = new File("art_images");
+                    if (!destDir.exists()) {
+                        destDir.mkdirs();
+                    }
+                    File destFile = new File(destDir, "art_" + id + "_" + selectedImageFile.getName());
+                    Files.copy(selectedImageFile.toPath(), destFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    imagePath = "art_images" + File.separator + "art_" + id + "_" + selectedImageFile.getName();
+                    System.out.println("Copied image to: " + destFile.getPath());
+                }
+
                 Artist artist = new Artist(artistName, bio);
-                ArtPiece artPiece = new ArtPiece(id, title, artist, type, price, null, sellerEmail);
+                ArtPiece artPiece = new ArtPiece(id, title, artist, type, price, null, sellerEmail, imagePath);
                 manager.addArtPiece(artPiece);
                 messageLabel.setText("Art piece added successfully!");
 
-                // Update the View Art tab's TableView
                 updateArtTableItems();
 
-                // Generate and display QR code
                 try {
                     QRCodeGenerator.generateQRCode(artPiece);
                     File qrFile = new File("ArtQRCode_" + artPiece.getId() + ".png");
@@ -265,8 +373,12 @@ public class Seller {
                 bioField.clear();
                 typeCombo.setValue(null);
                 priceField.clear();
+                selectedImageFile = null;
+                imageLabel.setText("No image selected");
             } catch (NumberFormatException ex) {
                 messageLabel.setText("Invalid price format.");
+            } catch (Exception ex) {
+                messageLabel.setText("Error saving image: " + ex.getMessage());
             }
         });
 
@@ -373,7 +485,6 @@ public class Seller {
                 manager.updateArtPiece(id, title, artist, type, price, artPiece.getBuyerEmail(), artPiece.getSellerEmail());
                 messageLabel.setText("Art piece updated successfully!");
 
-                // Update the View Art tab's TableView
                 updateArtTableItems();
 
                 grid.setDisable(true);
@@ -421,10 +532,7 @@ public class Seller {
             }
             manager.deleteArtPiece(id);
             messageLabel.setText("Art piece deleted successfully!");
-
-            // Update the View Art tab's TableView
             updateArtTableItems();
-
             idField.clear();
         });
 
