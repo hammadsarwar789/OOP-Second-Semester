@@ -11,6 +11,8 @@ public class ArtPiece implements Serializable {
     private String buyerEmail;
     private String sellerEmail;
     private String imagePath;
+    private String bankName;      // New field for bank name
+    private String accountNumber; // New field for account number
 
     public ArtPiece(String id, String title, Artist artist, String type, double price, String buyerEmail, String sellerEmail) {
         this(id, title, artist, type, price, buyerEmail, sellerEmail, null);
@@ -27,7 +29,6 @@ public class ArtPiece implements Serializable {
         this.imagePath = imagePath;
     }
 
-    // Getters and Setters
     public String getId() { return id; }
     public String getTitle() { return title; }
     public Artist getArtist() { return artist; }
@@ -36,15 +37,20 @@ public class ArtPiece implements Serializable {
     public String getBuyerEmail() { return buyerEmail; }
     public String getSellerEmail() { return sellerEmail; }
     public String getImagePath() { return imagePath; }
+    public String getBankName() { return bankName; }      // New getter for bank name
+    public String getAccountNumber() { return accountNumber; } // New getter for account number
 
     public void setBuyerEmail(String buyerEmail) { this.buyerEmail = buyerEmail; }
     public void setImagePath(String imagePath) { this.imagePath = imagePath; }
+    public void setBankName(String bankName) { this.bankName = bankName; }      // New setter for bank name
+    public void setAccountNumber(String accountNumber) { this.accountNumber = accountNumber; } // New setter for account number
 
-    // New method to return formatted art piece details
     public String getInfo() {
-        return String.format("ID: %s, Title: %s, Artist: %s, Type: %s, Price: $%.2f, Buyer: %s, Seller: %s",
+        return String.format("ID: %s, Title: %s, Artist: %s, Type: %s, Price: $%.2f, Buyer: %s, Seller: %s, Bank: %s, Account: %s",
                 id, title, artist.getName(), type, price,
                 buyerEmail != null ? buyerEmail : "None",
-                sellerEmail != null ? sellerEmail : "None");
+                sellerEmail != null ? sellerEmail : "None",
+                bankName != null ? bankName : "N/A",         // Include bank name
+                accountNumber != null ? "****" + accountNumber.substring(accountNumber.length() - 4) : "N/A"); // Mask account number
     }
 }

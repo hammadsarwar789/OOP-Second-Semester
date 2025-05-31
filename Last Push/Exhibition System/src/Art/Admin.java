@@ -3,6 +3,7 @@ package Art;
 import javafx.animation.FadeTransition;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.value.ObservableValue;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -15,8 +16,10 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
+import javafx.util.Callback;
 import javafx.util.Duration;
 import java.io.File;
+import java.util.Optional;
 
 public class Admin {
     private final ArtExhibitionManager manager;
@@ -58,15 +61,7 @@ public class Admin {
         artTab.setClosable(false);
         artTab.setContent(createArtTab());
 
-        Tab purchasesTab = new Tab("Purchases");
-        purchasesTab.setClosable(false);
-        purchasesTab.setContent(createPurchasesTab());
-
-        Tab salesTab = new Tab("Sales");
-        salesTab.setClosable(false);
-        salesTab.setContent(createSalesTab());
-
-        tabPane.getTabs().addAll(usersTab, artTab, purchasesTab, salesTab);
+        tabPane.getTabs().addAll(usersTab, artTab);
 
         HBox footer = new HBox();
         footer.setAlignment(Pos.CENTER_RIGHT);
@@ -88,7 +83,7 @@ public class Admin {
         root.setCenter(tabPane);
         root.setBottom(footer);
 
-        Scene scene = new Scene(root, 800, 600);
+        Scene scene = new Scene(root, 1550, 750);
         stage.setScene(scene);
         stage.show();
 
@@ -119,6 +114,10 @@ public class Admin {
         content.setPadding(new Insets(20));
         content.setStyle("-fx-background-color: #ffffff;");
 
+        Label usersLabel = new Label("Manage Users");
+        usersLabel.setFont(Font.font("System", FontWeight.BOLD, 18));
+        usersLabel.setTextFill(Color.web("#1a3c6c"));
+
         Label messageLabel = new Label();
         messageLabel.setStyle("-fx-text-fill: #dc3545; -fx-font-size: 14;");
 
@@ -128,24 +127,196 @@ public class Admin {
         emailCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getEmail()));
         TableColumn<User, String> roleCol = new TableColumn<>("Role");
         roleCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getRole()));
-        usersTable.getColumns().addAll(emailCol, roleCol);
+        TableColumn<User, Double> totalTransCol = new TableColumn<>("Total Transactions ($)");
+        totalTransCol.setCellValueFactory(new Callback<TableColumn.CellDataFeatures<User, Double>, ObservableValue<Double>>() {
+            @Override
+            public ObservableValue<Double> call(TableColumn.CellDataFeatures<User, Double> data) {
+                User user = data.getValue();
+                String email = user.getEmail().toLowerCase();
+                String role = user.getRole().toLowerCase();
+                double total = 0.0;
+
+                if (role.equals("buyer")) {
+                    total = manager.getAllArtPieces().stream()
+                            .filter(art -> art.getBuyerEmail() != null && art.getBuyerEmail().equalsIgnoreCase(email))
+                            .mapToDouble(ArtPiece::getPrice)
+                            .sum();
+                } else if (role.equals("seller")) {
+                    total = manager.getAllArtPieces().stream()
+                            .filter(art -> art.getBuyerEmail() != null && art.getSellerEmail() != null && art.getSellerEmail().equalsIgnoreCase(email))
+                            .mapToDouble(ArtPiece::getPrice)
+                            .sum();
+                }
+                return new SimpleDoubleProperty(total).asObject();
+            }
+        });
+        totalTransCol.setCellFactory(column -> new TableCell<User, Double>() {
+            @Override
+            protected void updateItem(Double item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText("");
+                } else {
+                    setText(String.format("$%.2f", item));
+                }
+            }
+        });
+        usersTable.getColumns().addAll(emailCol, roleCol, totalTransCol);
         usersTable.setItems(javafx.collections.FXCollections.observableArrayList(userManager.getUsers().values()));
         usersTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
-        HBox removeBox = new HBox(10);
+        HBox actionBox = new HBox(10);
         TextField emailField = new TextField();
-        emailField.setPromptText("Enter email to remove");
+        emailField.setPromptText("Enter user email");
         emailField.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #d9e2ec; -fx-border-radius: 5; -fx-padding: 8;");
-        Button removeBuyerButton = new Button("Remove Buyer");
-        Button removeSellerButton = new Button("Remove Seller");
-        styleButton(removeBuyerButton);
-        styleButton(removeSellerButton);
-        removeBox.getChildren().addAll(emailField, removeBuyerButton, removeSellerButton);
 
-        removeBuyerButton.setOnAction(e -> removeUser("buyer", emailField.getText(), messageLabel, usersTable));
-        removeSellerButton.setOnAction(e -> removeUser("seller", emailField.getText(), messageLabel, usersTable));
+        Button addButton = new Button("Add User");
+        Button removeButton = new Button("Remove User");
+        Button viewTransactionsButton = new Button("View Transactions");
 
-        content.getChildren().addAll(usersTable, removeBox, messageLabel);
+        styleButton(addButton);
+        styleButton(removeButton);
+        styleButton(viewTransactionsButton);
+
+        actionBox.getChildren().addAll(emailField, addButton, removeButton, viewTransactionsButton);
+
+        addButton.setOnAction(e -> {
+            String email = emailField.getText().trim().toLowerCase();
+            if (email.isEmpty()) {
+                messageLabel.setText("Please enter an email.");
+                return;
+            }
+            if (userManager.getUsers().containsKey(email)) {
+                messageLabel.setText("User with email '" + email + "' already exists.");
+                return;
+            }
+
+            ChoiceDialog<String> roleDialog = new ChoiceDialog<>("buyer", "buyer", "seller");
+            roleDialog.setTitle("Add User");
+            roleDialog.setHeaderText("Select User Role");
+            roleDialog.setContentText("Role:");
+            Optional<String> roleResult = roleDialog.showAndWait();
+
+            if (roleResult.isPresent()) {
+                String role = roleResult.get();
+                TextInputDialog passwordDialog = new TextInputDialog();
+                passwordDialog.setTitle("Add User");
+                passwordDialog.setHeaderText("Enter Password for " + email);
+                passwordDialog.setContentText("Password:");
+                Optional<String> passwordResult = passwordDialog.showAndWait();
+
+                if (passwordResult.isPresent() && !passwordResult.get().trim().isEmpty()) {
+                    String password = passwordResult.get().trim();
+                    userManager.addUser(email, role, password);
+                    usersTable.setItems(javafx.collections.FXCollections.observableArrayList(userManager.getUsers().values()));
+                    messageLabel.setText("User '" + email + "' (" + role + ") added successfully.");
+                    emailField.clear();
+                } else {
+                    messageLabel.setText("Password cannot be empty. User addition cancelled.");
+                }
+            } else {
+                messageLabel.setText("User addition cancelled.");
+            }
+        });
+
+        removeButton.setOnAction(e -> {
+            String email = emailField.getText().trim().toLowerCase();
+            if (email.isEmpty()) {
+                messageLabel.setText("Please enter an email.");
+                return;
+            }
+            if (email.equalsIgnoreCase(ADMIN_EMAIL)) {
+                messageLabel.setText("Cannot remove the admin account.");
+                return;
+            }
+            User user = userManager.getUsers().get(email);
+            if (user == null) {
+                messageLabel.setText("No user found with email '" + email + "'.");
+                return;
+            }
+
+            Alert confirmAlert = new Alert(Alert.AlertType.CONFIRMATION);
+            confirmAlert.setTitle("Confirm Removal");
+            confirmAlert.setHeaderText("Remove User: " + email + " (" + user.getRole() + ")");
+            confirmAlert.setContentText("Are you sure you want to remove this user?");
+            Optional<ButtonType> result = confirmAlert.showAndWait();
+
+            if (result.isPresent() && result.get() == ButtonType.OK) {
+                userManager.removeUser(email);
+                usersTable.setItems(javafx.collections.FXCollections.observableArrayList(userManager.getUsers().values()));
+                messageLabel.setText("User '" + email + "' removed successfully.");
+                emailField.clear();
+            } else {
+                messageLabel.setText("User removal cancelled.");
+            }
+        });
+
+        viewTransactionsButton.setOnAction(e -> {
+            String email = emailField.getText().trim().toLowerCase();
+            if (email.isEmpty()) {
+                messageLabel.setText("Please enter an email.");
+                return;
+            }
+            User user = userManager.getUsers().get(email);
+            if (user == null) {
+                messageLabel.setText("No user found with email '" + email + "'.");
+                return;
+            }
+
+            java.util.List<ArtPiece> transactions = new java.util.ArrayList<>();
+            String role = user.getRole().toLowerCase();
+            double totalPrice = 0.0;
+
+            if (role.equals("buyer")) {
+                transactions = manager.getAllArtPieces().stream()
+                        .filter(art -> art.getBuyerEmail() != null && art.getBuyerEmail().equalsIgnoreCase(email))
+                        .toList();
+                totalPrice = transactions.stream().mapToDouble(ArtPiece::getPrice).sum();
+            } else if (role.equals("seller")) {
+                transactions = manager.getAllArtPieces().stream()
+                        .filter(art -> art.getBuyerEmail() != null && art.getSellerEmail() != null && art.getSellerEmail().equalsIgnoreCase(email))
+                        .toList();
+                totalPrice = transactions.stream().mapToDouble(ArtPiece::getPrice).sum();
+            } else {
+                messageLabel.setText("Invalid role for viewing transactions.");
+                return;
+            }
+
+            TableView<ArtPiece> transactionsTable = new TableView<>();
+            transactionsTable.setStyle("-fx-background-color: #ffffff; -fx-border-color: #d9e2ec; -fx-border-radius: 5;");
+            TableColumn<ArtPiece, String> idCol = new TableColumn<>("ID");
+            idCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getId()));
+            TableColumn<ArtPiece, String> titleCol = new TableColumn<>("Title");
+            titleCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getTitle()));
+            TableColumn<ArtPiece, String> artistCol = new TableColumn<>("Artist");
+            artistCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getArtist().getName()));
+            TableColumn<ArtPiece, String> transCol = new TableColumn<>(role.equals("buyer") ? "Buyer" : "Seller");
+            transCol.setCellValueFactory(data -> new SimpleStringProperty(role.equals("buyer") ? (data.getValue().getBuyerEmail() != null ? data.getValue().getBuyerEmail() : "") : (data.getValue().getSellerEmail() != null ? data.getValue().getSellerEmail() : "")));
+            TableColumn<ArtPiece, Double> priceCol = new TableColumn<>("Price");
+            priceCol.setCellValueFactory(data -> new SimpleDoubleProperty(data.getValue().getPrice()).asObject());
+            transactionsTable.getColumns().addAll(idCol, titleCol, artistCol, transCol, priceCol);
+            transactionsTable.setItems(javafx.collections.FXCollections.observableArrayList(transactions));
+            transactionsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+
+            VBox alertContent = new VBox(10);
+            alertContent.setPadding(new Insets(10));
+            Label totalLabel = new Label("Total Price: $" + String.format("%.2f", totalPrice));
+            totalLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
+            totalLabel.setStyle("-fx-text-fill: #1a3c6c;");
+            alertContent.getChildren().addAll(totalLabel, transactionsTable);
+
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Transactions for " + email);
+            alert.setHeaderText(transactions.isEmpty() ? "No Transactions Found" : (role.equals("buyer") ? "Purchases by " + email : "Sales by " + email));
+            alert.getDialogPane().setContent(alertContent);
+            alert.getDialogPane().setStyle("-fx-background-color: #ffffff; -fx-background-radius: 10; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0, 0, 2);");
+            alert.showAndWait();
+
+            messageLabel.setText("Displayed transactions for '" + email + "'.");
+            emailField.clear();
+        });
+
+        content.getChildren().addAll(usersLabel, usersTable, actionBox, messageLabel);
         return content;
     }
 
@@ -167,12 +338,28 @@ public class Admin {
         artistCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getArtist().getName()));
         TableColumn<ArtPiece, String> typeCol = new TableColumn<>("Type");
         typeCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getType()));
-        TableColumn<ArtPiece, Double> priceCol = new TableColumn<>("Price");
-        priceCol.setCellValueFactory(data -> new SimpleDoubleProperty(data.getValue().getPrice()).asObject());
         TableColumn<ArtPiece, String> buyerCol = new TableColumn<>("Buyer");
         buyerCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getBuyerEmail() != null ? data.getValue().getBuyerEmail() : ""));
         TableColumn<ArtPiece, String> sellerCol = new TableColumn<>("Seller");
         sellerCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getSellerEmail() != null ? data.getValue().getSellerEmail() : ""));
+        TableColumn<ArtPiece, Double> priceCol = new TableColumn<>("Price");
+        priceCol.setCellValueFactory(data -> new SimpleDoubleProperty(data.getValue().getPrice()).asObject());
+        TableColumn<ArtPiece, String> bankNameCol = new TableColumn<>("Bank Name");
+        bankNameCol.setCellValueFactory(data -> {
+            ArtPiece art = data.getValue();
+            if (art.getBuyerEmail() == null) {
+                return new SimpleStringProperty("");
+            }
+            return new SimpleStringProperty(art.getBankName() != null ? art.getBankName() : "Not Provided");
+        });
+        TableColumn<ArtPiece, String> accountNumberCol = new TableColumn<>("Account Number");
+        accountNumberCol.setCellValueFactory(data -> {
+            ArtPiece art = data.getValue();
+            if (art.getBuyerEmail() == null) {
+                return new SimpleStringProperty("");
+            }
+            return new SimpleStringProperty(art.getAccountNumber() != null ? "****" + art.getAccountNumber().substring(art.getAccountNumber().length() - 4) : "Not Provided");
+        });
         TableColumn<ArtPiece, Void> imageCol = new TableColumn<>("Image");
         imageCol.setCellFactory(param -> new TableCell<>() {
             private final Button imageButton = new Button("View Image");
@@ -207,9 +394,17 @@ public class Admin {
                 }
             }
         });
-        artTable.getColumns().addAll(idCol, titleCol, artistCol, typeCol, priceCol, buyerCol, sellerCol, imageCol);
+        artTable.getColumns().addAll(idCol, titleCol, artistCol, typeCol, priceCol, buyerCol, sellerCol, bankNameCol, accountNumberCol, imageCol);
         artTable.setItems(javafx.collections.FXCollections.observableArrayList(manager.getAllArtPieces()));
         artTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+
+        double totalSold = manager.getAllArtPieces().stream()
+                .filter(art -> art.getBuyerEmail() != null)
+                .mapToDouble(ArtPiece::getPrice)
+                .sum();
+        Label totalSoldLabel = new Label("Total Sold Value: $" + String.format("%.2f", totalSold));
+        totalSoldLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
+        totalSoldLabel.setStyle("-fx-text-fill: #1a3c6c;");
 
         HBox removeBox = new HBox(10);
         TextField artIdField = new TextField();
@@ -246,121 +441,8 @@ public class Admin {
             }
         });
 
-        content.getChildren().addAll(artTable, removeBox, searchBox, messageLabel);
+        content.getChildren().addAll(artTable, totalSoldLabel, removeBox, searchBox, messageLabel);
         return content;
-    }
-
-    private VBox createPurchasesTab() {
-        VBox content = new VBox(10);
-        content.setPadding(new Insets(20));
-        content.setStyle("-fx-background-color: #ffffff;");
-
-        Label messageLabel = new Label();
-        messageLabel.setStyle("-fx-text-fill: #dc3545; -fx-font-size: 14;");
-
-        TableView<ArtPiece> purchasesTable = new TableView<>();
-        purchasesTable.setStyle("-fx-background-color: #ffffff; -fx-border-color: #d9e2ec; -fx-border-radius: 5;");
-        TableColumn<ArtPiece, String> idCol = new TableColumn<>("ID");
-        idCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getId()));
-        TableColumn<ArtPiece, String> titleCol = new TableColumn<>("Title");
-        titleCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getTitle()));
-        TableColumn<ArtPiece, String> artistCol = new TableColumn<>("Artist");
-        artistCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getArtist().getName()));
-        TableColumn<ArtPiece, String> buyerCol = new TableColumn<>("Buyer");
-        buyerCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getBuyerEmail() != null ? data.getValue().getBuyerEmail() : ""));
-        purchasesTable.getColumns().addAll(idCol, titleCol, artistCol, buyerCol);
-        purchasesTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-
-        HBox searchBox = new HBox(10);
-        TextField buyerEmailField = new TextField();
-        buyerEmailField.setPromptText("Enter buyer's email");
-        buyerEmailField.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #d9e2ec; -fx-border-radius: 5; -fx-padding: 8;");
-        Button searchButton = new Button("View Purchases");
-        styleButton(searchButton);
-        searchBox.getChildren().addAll(buyerEmailField, searchButton);
-
-        searchButton.setOnAction(e -> {
-            String buyerEmail = buyerEmailField.getText().trim().toLowerCase();
-            if (buyerEmail.isEmpty()) {
-                messageLabel.setText("Please enter a buyer's email.");
-                purchasesTable.setItems(javafx.collections.FXCollections.observableArrayList());
-            } else {
-                java.util.List<ArtPiece> purchases = manager.getAllArtPieces().stream()
-                        .filter(art -> art.getBuyerEmail() != null && art.getBuyerEmail().equalsIgnoreCase(buyerEmail))
-                        .toList();
-                purchasesTable.setItems(javafx.collections.FXCollections.observableArrayList(purchases));
-                messageLabel.setText(purchases.isEmpty() ? "No purchases found for this buyer." : "Purchases loaded.");
-            }
-        });
-
-        content.getChildren().addAll(purchasesTable, searchBox, messageLabel);
-        return content;
-    }
-
-    private VBox createSalesTab() {
-        VBox content = new VBox(10);
-        content.setPadding(new Insets(20));
-        content.setStyle("-fx-background-color: #ffffff;");
-
-        Label messageLabel = new Label();
-        messageLabel.setStyle("-fx-text-fill: #dc3545; -fx-font-size: 14;");
-
-        TableView<ArtPiece> salesTable = new TableView<>();
-        salesTable.setStyle("-fx-background-color: #ffffff; -fx-border-color: #d9e2ec; -fx-border-radius: 5;");
-        TableColumn<ArtPiece, String> idCol = new TableColumn<>("ID");
-        idCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getId()));
-        TableColumn<ArtPiece, String> titleCol = new TableColumn<>("Title");
-        titleCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getTitle()));
-        TableColumn<ArtPiece, String> artistCol = new TableColumn<>("Artist");
-        artistCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getArtist().getName()));
-        TableColumn<ArtPiece, String> sellerCol = new TableColumn<>("Seller");
-        sellerCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getSellerEmail() != null ? data.getValue().getSellerEmail() : ""));
-        salesTable.getColumns().addAll(idCol, titleCol, artistCol, sellerCol);
-        salesTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-
-        HBox searchBox = new HBox(10);
-        TextField sellerEmailField = new TextField();
-        sellerEmailField.setPromptText("Enter seller's email");
-        sellerEmailField.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #d9e2ec; -fx-border-radius: 5; -fx-padding: 8;");
-        Button searchButton = new Button("View Sales");
-        styleButton(searchButton);
-        searchBox.getChildren().addAll(sellerEmailField, searchButton);
-
-        searchButton.setOnAction(e -> {
-            String sellerEmail = sellerEmailField.getText().trim().toLowerCase();
-            if (sellerEmail.isEmpty()) {
-                messageLabel.setText("Please enter a seller's email.");
-                salesTable.setItems(javafx.collections.FXCollections.observableArrayList());
-            } else {
-                java.util.List<ArtPiece> sales = manager.getAllArtPieces().stream()
-                        .filter(art -> art.getSellerEmail() != null && art.getSellerEmail().equalsIgnoreCase(sellerEmail))
-                        .toList();
-                salesTable.setItems(javafx.collections.FXCollections.observableArrayList(sales));
-                messageLabel.setText(sales.isEmpty() ? "No sales found for this seller." : "Sales loaded.");
-            }
-        });
-
-        content.getChildren().addAll(salesTable, searchBox, messageLabel);
-        return content;
-    }
-
-    private void removeUser(String role, String email, Label messageLabel, TableView<User> usersTable) {
-        if (email.isEmpty()) {
-            messageLabel.setText("Please enter an email.");
-            return;
-        }
-        if (email.equalsIgnoreCase(ADMIN_EMAIL)) {
-            messageLabel.setText("Cannot remove the admin account.");
-            return;
-        }
-        User user = userManager.getUsers().get(email.toLowerCase());
-        if (user != null && user.getRole().equalsIgnoreCase(role)) {
-            userManager.removeUser(email);
-            usersTable.setItems(javafx.collections.FXCollections.observableArrayList(userManager.getUsers().values()));
-            messageLabel.setText(role.substring(0, 1).toUpperCase() + role.substring(1) + " removed successfully.");
-        } else {
-            messageLabel.setText("No such " + role + " found with that email.");
-        }
     }
 
     private void removeArtPiece(String id, Label messageLabel, TableView<ArtPiece> artTable) {
@@ -370,6 +452,10 @@ public class Admin {
         }
         ArtPiece artPiece = manager.getArtPieceById(id);
         if (artPiece != null) {
+            if (artPiece.getBuyerEmail() != null) {
+                messageLabel.setText("Cannot remove art piece with ID '" + id + "' as it is already sold.");
+                return;
+            }
             manager.deleteArtPiece(id);
             artTable.setItems(javafx.collections.FXCollections.observableArrayList(manager.getAllArtPieces()));
             messageLabel.setText("Art piece removed successfully.");

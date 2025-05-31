@@ -23,7 +23,7 @@ public class ArtExhibitionManager {
     public void updateArtPiece(String id, String title, Artist artist, String type, double price, String buyerEmail, String sellerEmail) {
         ArtPiece artPiece = artPieces.get(id);
         if (artPiece != null) {
-            // Update fields, preserve imagePath
+
             artPieces.put(id, new ArtPiece(id, title, artist, type, price, buyerEmail, sellerEmail, artPiece.getImagePath()));
             saveToFile();
         }
@@ -32,7 +32,7 @@ public class ArtExhibitionManager {
     public void deleteArtPiece(String id) {
         ArtPiece artPiece = artPieces.get(id);
         if (artPiece != null) {
-            // Delete associated image file
+
             if (artPiece.getImagePath() != null && !artPiece.getImagePath().isEmpty()) {
                 File imageFile = new File(artPiece.getImagePath());
                 if (imageFile.exists()) {
@@ -101,7 +101,7 @@ public class ArtExhibitionManager {
         try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                String[] parts = line.split(",", -1); // Preserve empty fields
+                String[] parts = line.split(",", -1);
                 if (parts.length >= 9) {
                     try {
                         String id = parts[0].trim();

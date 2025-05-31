@@ -94,7 +94,7 @@ public class Seller {
         root.setCenter(tabPane);
         root.setBottom(footer);
 
-        Scene scene = new Scene(root, 800, 600);
+        Scene scene = new Scene(root, 1550, 750);
         stage.setScene(scene);
         stage.show();
 
@@ -142,6 +142,22 @@ public class Seller {
         priceCol.setCellValueFactory(data -> new SimpleDoubleProperty(data.getValue().getPrice()).asObject());
         TableColumn<ArtPiece, String> buyerCol = new TableColumn<>("Buyer");
         buyerCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getBuyerEmail() != null ? data.getValue().getBuyerEmail() : ""));
+        TableColumn<ArtPiece, String> bankNameCol = new TableColumn<>("Bank Name");
+        bankNameCol.setCellValueFactory(data -> {
+            ArtPiece art = data.getValue();
+            if (art.getBuyerEmail() == null) {
+                return new SimpleStringProperty("");
+            }
+            return new SimpleStringProperty(art.getBankName() != null ? art.getBankName() : "Not Provided");
+        });
+        TableColumn<ArtPiece, String> accountNumberCol = new TableColumn<>("Account Number");
+        accountNumberCol.setCellValueFactory(data -> {
+            ArtPiece art = data.getValue();
+            if (art.getBuyerEmail() == null) {
+                return new SimpleStringProperty("");
+            }
+            return new SimpleStringProperty(art.getAccountNumber() != null ? "****" + art.getAccountNumber().substring(art.getAccountNumber().length() - 4) : "Not Provided");
+        });
         TableColumn<ArtPiece, Void> imageCol = new TableColumn<>("Image");
         imageCol.setCellFactory(param -> new TableCell<>() {
             private final Button imageButton = new Button("View Image");
@@ -176,11 +192,20 @@ public class Seller {
                 }
             }
         });
-        artTable.getColumns().addAll(idCol, titleCol, artistCol, typeCol, priceCol, buyerCol, imageCol);
+        artTable.getColumns().addAll(idCol, titleCol, artistCol, typeCol, priceCol, buyerCol, bankNameCol, accountNumberCol, imageCol);
         updateArtTableItems();
         artTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
 
-        content.getChildren().addAll(artTable, messageLabel);
+        double totalSold = manager.getAllArtPieces().stream()
+                .filter(art -> art.getSellerEmail() != null && art.getSellerEmail().equalsIgnoreCase(sellerEmail)
+                        && art.getBuyerEmail() != null)
+                .mapToDouble(ArtPiece::getPrice)
+                .sum();
+        Label totalSoldLabel = new Label("Total Sold Value: $" + String.format("%.2f", totalSold));
+        totalSoldLabel.setFont(Font.font("System", FontWeight.BOLD, 14));
+        totalSoldLabel.setStyle("-fx-text-fill: #1a3c6c;");
+
+        content.getChildren().addAll(artTable, totalSoldLabel, messageLabel);
         return content;
     }
 
@@ -480,6 +505,10 @@ public class Seller {
                     messageLabel.setText("Art piece not found or not owned by you.");
                     return;
                 }
+                if (artPiece.getBuyerEmail() != null) {
+                    messageLabel.setText("Cannot update art piece with ID '" + id + "' as it is already sold.");
+                    return;
+                }
 
                 Artist artist = new Artist(artistName, bio);
                 manager.updateArtPiece(id, title, artist, type, price, artPiece.getBuyerEmail(), artPiece.getSellerEmail());
@@ -528,6 +557,10 @@ public class Seller {
             ArtPiece artPiece = manager.getArtPieceById(id);
             if (artPiece == null || !artPiece.getSellerEmail().equalsIgnoreCase(sellerEmail)) {
                 messageLabel.setText("Art piece not found or not owned by you.");
+                return;
+            }
+            if (artPiece.getBuyerEmail() != null) {
+                messageLabel.setText("Cannot delete art piece with ID '" + id + "' as it is already sold.");
                 return;
             }
             manager.deleteArtPiece(id);

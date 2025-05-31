@@ -14,7 +14,6 @@ import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
-import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 import java.io.File;
@@ -60,15 +59,7 @@ public class AdminView {
         artTab.setClosable(false);
         artTab.setContent(createArtTab());
 
-        Tab purchasesTab = new Tab("Purchases");
-        purchasesTab.setClosable(false);
-        purchasesTab.setContent(createPurchasesTab());
-
-        Tab salesTab = new Tab("Sales");
-        salesTab.setClosable(false);
-        salesTab.setContent(createSalesTab());
-
-        tabPane.getTabs().addAll(usersTab, artTab, purchasesTab, salesTab);
+        tabPane.getTabs().addAll(usersTab, artTab);
 
         HBox footer = new HBox();
         footer.setAlignment(Pos.CENTER_RIGHT);
@@ -121,8 +112,13 @@ public class AdminView {
         content.setPadding(new Insets(20));
         content.setStyle("-fx-background-color: #ffffff;");
 
-        Label messageLabel = new Label();
-        messageLabel.setStyle("-fx-text-fill: #dc3545; -fx-font-size: 14;");
+        // User Management Section
+        Label usersLabel = new Label("Manage Users");
+        usersLabel.setFont(Font.font("System", FontWeight.BOLD, 18));
+        usersLabel.setTextFill(Color.web("#1a3c6c"));
+
+        Label usersMessageLabel = new Label();
+        usersMessageLabel.setStyle("-fx-text-fill: #dc3545; -fx-font-size: 14;");
 
         TableView<User> usersTable = new TableView<>();
         usersTable.setStyle("-fx-background-color: #ffffff; -fx-border-color: #d9e2ec; -fx-border-radius: 5;");
@@ -144,10 +140,104 @@ public class AdminView {
         styleButton(removeSellerButton);
         removeBox.getChildren().addAll(emailField, removeBuyerButton, removeSellerButton);
 
-        removeBuyerButton.setOnAction(e -> removeUser("buyer", emailField.getText(), messageLabel, usersTable));
-        removeSellerButton.setOnAction(e -> removeUser("seller", emailField.getText(), messageLabel, usersTable));
+        removeBuyerButton.setOnAction(e -> removeUser("buyer", emailField.getText(), usersMessageLabel, usersTable));
+        removeSellerButton.setOnAction(e -> removeUser("seller", emailField.getText(), usersMessageLabel, usersTable));
 
-        content.getChildren().addAll(usersTable, removeBox, messageLabel);
+        // Purchases Section
+        Label purchasesLabel = new Label("View Purchases");
+        purchasesLabel.setFont(Font.font("System", FontWeight.BOLD, 18));
+        purchasesLabel.setTextFill(Color.web("#1a3c6c"));
+
+        Label purchasesMessageLabel = new Label();
+        purchasesMessageLabel.setStyle("-fx-text-fill: #dc3545; -fx-font-size: 14;");
+
+        TableView<ArtPiece> purchasesTable = new TableView<>();
+        purchasesTable.setStyle("-fx-background-color: #ffffff; -fx-border-color: #d9e2ec; -fx-border-radius: 5;");
+        TableColumn<ArtPiece, String> purchaseIdCol = new TableColumn<>("ID");
+        purchaseIdCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getId()));
+        TableColumn<ArtPiece, String> purchaseTitleCol = new TableColumn<>("Title");
+        purchaseTitleCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getTitle()));
+        TableColumn<ArtPiece, String> purchaseArtistCol = new TableColumn<>("Artist");
+        purchaseArtistCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getArtist().getName()));
+        TableColumn<ArtPiece, String> purchaseBuyerCol = new TableColumn<>("Buyer");
+        purchaseBuyerCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getBuyerEmail() != null ? data.getValue().getBuyerEmail() : ""));
+        TableColumn<ArtPiece, String> purchaseInfoCol = new TableColumn<>("Info");
+        purchaseInfoCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getInfo()));
+        purchasesTable.getColumns().addAll(purchaseIdCol, purchaseTitleCol, purchaseArtistCol, purchaseBuyerCol, purchaseInfoCol);
+        purchasesTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+
+        HBox purchaseSearchBox = new HBox(10);
+        TextField buyerEmailField = new TextField();
+        buyerEmailField.setPromptText("Enter buyer's email");
+        buyerEmailField.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #d9e2ec; -fx-border-radius: 5; -fx-padding: 8;");
+        Button purchaseSearchButton = new Button("View Purchases");
+        styleButton(purchaseSearchButton);
+        purchaseSearchBox.getChildren().addAll(buyerEmailField, purchaseSearchButton);
+
+        purchaseSearchButton.setOnAction(e -> {
+            String buyerEmail = buyerEmailField.getText().trim().toLowerCase();
+            if (buyerEmail.isEmpty()) {
+                purchasesMessageLabel.setText("Please enter a buyer's email.");
+                purchasesTable.setItems(javafx.collections.FXCollections.observableArrayList());
+            } else {
+                java.util.List<ArtPiece> purchases = manager.getAllArtPieces().stream()
+                        .filter(art -> art.getBuyerEmail() != null && art.getBuyerEmail().equalsIgnoreCase(buyerEmail))
+                        .toList();
+                purchasesTable.setItems(javafx.collections.FXCollections.observableArrayList(purchases));
+                purchasesMessageLabel.setText(purchases.isEmpty() ? "No purchases found for this buyer." : "Purchases loaded.");
+            }
+        });
+
+        // Sales Section
+        Label salesLabel = new Label("View Sales");
+        salesLabel.setFont(Font.font("System", FontWeight.BOLD, 18));
+        salesLabel.setTextFill(Color.web("#1a3c6c"));
+
+        Label salesMessageLabel = new Label();
+        salesMessageLabel.setStyle("-fx-text-fill: #dc3545; -fx-font-size: 14;");
+
+        TableView<ArtPiece> salesTable = new TableView<>();
+        salesTable.setStyle("-fx-background-color: #ffffff; -fx-border-color: #d9e2ec; -fx-border-radius: 5;");
+        TableColumn<ArtPiece, String> saleIdCol = new TableColumn<>("ID");
+        saleIdCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getId()));
+        TableColumn<ArtPiece, String> saleTitleCol = new TableColumn<>("Title");
+        saleTitleCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getTitle()));
+        TableColumn<ArtPiece, String> saleArtistCol = new TableColumn<>("Artist");
+        saleArtistCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getArtist().getName()));
+        TableColumn<ArtPiece, String> saleSellerCol = new TableColumn<>("Seller");
+        saleSellerCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getSellerEmail() != null ? data.getValue().getSellerEmail() : ""));
+        TableColumn<ArtPiece, String> saleInfoCol = new TableColumn<>("Info");
+        saleInfoCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getInfo()));
+        salesTable.getColumns().addAll(saleIdCol, saleTitleCol, saleArtistCol, saleSellerCol, saleInfoCol);
+        salesTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+
+        HBox saleSearchBox = new HBox(10);
+        TextField sellerEmailField = new TextField();
+        sellerEmailField.setPromptText("Enter seller's email");
+        sellerEmailField.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #d9e2ec; -fx-border-radius: 5; -fx-padding: 8;");
+        Button saleSearchButton = new Button("View Sales");
+        styleButton(saleSearchButton);
+        saleSearchBox.getChildren().addAll(sellerEmailField, saleSearchButton);
+
+        saleSearchButton.setOnAction(e -> {
+            String sellerEmail = sellerEmailField.getText().trim().toLowerCase();
+            if (sellerEmail.isEmpty()) {
+                salesMessageLabel.setText("Please enter a seller's email.");
+                salesTable.setItems(javafx.collections.FXCollections.observableArrayList());
+            } else {
+                java.util.List<ArtPiece> sales = manager.getAllArtPieces().stream()
+                        .filter(art -> art.getSellerEmail() != null && art.getSellerEmail().equalsIgnoreCase(sellerEmail))
+                        .toList();
+                salesTable.setItems(javafx.collections.FXCollections.observableArrayList(sales));
+                salesMessageLabel.setText(sales.isEmpty() ? "No sales found for this seller." : "Sales loaded.");
+            }
+        });
+
+        content.getChildren().addAll(
+                usersLabel, usersTable, removeBox, usersMessageLabel,
+                new Separator(), purchasesLabel, purchasesTable, purchaseSearchBox, purchasesMessageLabel,
+                new Separator(), salesLabel, salesTable, saleSearchBox, salesMessageLabel
+        );
         return content;
     }
 
@@ -254,104 +344,6 @@ public class AdminView {
         return content;
     }
 
-    private VBox createPurchasesTab() {
-        VBox content = new VBox(10);
-        content.setPadding(new Insets(20));
-        content.setStyle("-fx-background-color: #ffffff;");
-
-        Label messageLabel = new Label();
-        messageLabel.setStyle("-fx-text-fill: #dc3545; -fx-font-size: 14;");
-
-        TableView<ArtPiece> purchasesTable = new TableView<>();
-        purchasesTable.setStyle("-fx-background-color: #ffffff; -fx-border-color: #d9e2ec; -fx-border-radius: 5;");
-        TableColumn<ArtPiece, String> idCol = new TableColumn<>("ID");
-        idCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getId()));
-        TableColumn<ArtPiece, String> titleCol = new TableColumn<>("Title");
-        titleCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getTitle()));
-        TableColumn<ArtPiece, String> artistCol = new TableColumn<>("Artist");
-        artistCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getArtist().getName()));
-        TableColumn<ArtPiece, String> buyerCol = new TableColumn<>("Buyer");
-        buyerCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getBuyerEmail() != null ? data.getValue().getBuyerEmail() : ""));
-        TableColumn<ArtPiece, String> infoCol = new TableColumn<>("Info");
-        infoCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getInfo()));
-        purchasesTable.getColumns().addAll(idCol, titleCol, artistCol, buyerCol, infoCol);
-        purchasesTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-
-        HBox searchBox = new HBox(10);
-        TextField buyerEmailField = new TextField();
-        buyerEmailField.setPromptText("Enter buyer's email");
-        buyerEmailField.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #d9e2ec; -fx-border-radius: 5; -fx-padding: 8;");
-        Button searchButton = new Button("View Purchases");
-        styleButton(searchButton);
-        searchBox.getChildren().addAll(buyerEmailField, searchButton);
-
-        searchButton.setOnAction(e -> {
-            String buyerEmail = buyerEmailField.getText().trim().toLowerCase();
-            if (buyerEmail.isEmpty()) {
-                messageLabel.setText("Please enter a buyer's email.");
-                purchasesTable.setItems(javafx.collections.FXCollections.observableArrayList());
-            } else {
-                java.util.List<ArtPiece> purchases = manager.getAllArtPieces().stream()
-                        .filter(art -> art.getBuyerEmail() != null && art.getBuyerEmail().equalsIgnoreCase(buyerEmail))
-                        .toList();
-                purchasesTable.setItems(javafx.collections.FXCollections.observableArrayList(purchases));
-                messageLabel.setText(purchases.isEmpty() ? "No purchases found for this buyer." : "Purchases loaded.");
-            }
-        });
-
-        content.getChildren().addAll(purchasesTable, searchBox, messageLabel);
-        return content;
-    }
-
-    private VBox createSalesTab() {
-        VBox content = new VBox(10);
-        content.setPadding(new Insets(20));
-        content.setStyle("-fx-background-color: #ffffff;");
-
-        Label messageLabel = new Label();
-        messageLabel.setStyle("-fx-text-fill: #dc3545; -fx-font-size: 14;");
-
-        TableView<ArtPiece> salesTable = new TableView<>();
-        salesTable.setStyle("-fx-background-color: #ffffff; -fx-border-color: #d9e2ec; -fx-border-radius: 5;");
-        TableColumn<ArtPiece, String> idCol = new TableColumn<>("ID");
-        idCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getId()));
-        TableColumn<ArtPiece, String> titleCol = new TableColumn<>("Title");
-        titleCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getTitle()));
-        TableColumn<ArtPiece, String> artistCol = new TableColumn<>("Artist");
-        artistCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getArtist().getName()));
-        TableColumn<ArtPiece, String> sellerCol = new TableColumn<>("Seller");
-        sellerCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getSellerEmail() != null ? data.getValue().getSellerEmail() : ""));
-        TableColumn<ArtPiece, String> infoCol = new TableColumn<>("Info");
-        infoCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getInfo()));
-        salesTable.getColumns().addAll(idCol, titleCol, artistCol, sellerCol, infoCol);
-        salesTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-
-        HBox searchBox = new HBox(10);
-        TextField sellerEmailField = new TextField();
-        sellerEmailField.setPromptText("Enter seller's email");
-        sellerEmailField.setStyle("-fx-background-color: #f9f9f9; -fx-border-color: #d9e2ec; -fx-border-radius: 5; -fx-padding: 8;");
-        Button searchButton = new Button("View Sales");
-        styleButton(searchButton);
-        searchBox.getChildren().addAll(sellerEmailField, searchButton);
-
-        searchButton.setOnAction(e -> {
-            String sellerEmail = sellerEmailField.getText().trim().toLowerCase();
-            if (sellerEmail.isEmpty()) {
-                messageLabel.setText("Please enter a seller's email.");
-                salesTable.setItems(javafx.collections.FXCollections.observableArrayList());
-            } else {
-                java.util.List<ArtPiece> sales = manager.getAllArtPieces().stream()
-                        .filter(art -> art.getSellerEmail() != null && art.getSellerEmail().equalsIgnoreCase(sellerEmail))
-                        .toList();
-                salesTable.setItems(javafx.collections.FXCollections.observableArrayList(sales));
-                messageLabel.setText(sales.isEmpty() ? "No sales found for this seller." : "Sales loaded.");
-            }
-        });
-
-        content.getChildren().addAll(salesTable, searchBox, messageLabel);
-        return content;
-    }
-
     private void removeUser(String role, String email, Label messageLabel, TableView<User> usersTable) {
         if (email.isEmpty()) {
             messageLabel.setText("Please enter an email.");
@@ -381,8 +373,7 @@ public class AdminView {
 
         Optional<ButtonType> result = alert.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
-            userManager.removeUser(email); // Removed 'boolean removed ='
-            // If you want to check success, you need userManager.removeUser to return boolean
+            userManager.removeUser(email);
             messageLabel.setText("User '" + email + "' (" + role + ") removed successfully.");
             usersTable.setItems(javafx.collections.FXCollections.observableArrayList(userManager.getUsers().values()));
         } else {
@@ -410,8 +401,7 @@ public class AdminView {
 
         Optional<ButtonType> result = alert.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
-            manager.deleteArtPiece(artId); // Removed 'boolean removed ='
-            // If you want to check success, you need manager.deleteArtPiece to return boolean
+            manager.deleteArtPiece(artId);
             messageLabel.setText("Art piece '" + artId + "' removed successfully.");
             artTable.setItems(javafx.collections.FXCollections.observableArrayList(manager.getAllArtPieces()));
         } else {
